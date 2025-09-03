@@ -45,6 +45,7 @@ class ChessEngine:
         ...
 
     def get_all_legal_moves(self, state: GameState) -> list[str]:
+        """Generate all legal moves for the current game state."""
         all_moves = []
         is_white_turn = state.turn == 'w'
 
@@ -65,6 +66,7 @@ class ChessEngine:
         return all_moves
     
     def get_rook_moves(self, board, r, c):
+        """Generate all possible rook moves from position (r, c)."""
         moves = []
         start_square_notation = self._to_algebraic(r, c)
         
@@ -97,7 +99,150 @@ class ChessEngine:
         return moves
 
     def get_knight_moves(self, board, r, c):
-        return []
+        """Generate all possible knight moves from position (r, c)."""
+        moves = []
+        start_square_notation = self._to_algebraic(r, c)
+
+        knight_char = board[r][c]
+        is_white_knight = knight_char.isupper()
+
+        # All 8 possible knight jumps
+        directions = [
+            (-2, -1), (-2, 1),
+            (-1, -2), (-1, 2),
+            (1, -2),  (1, 2),
+            (2, -1),  (2, 1),
+        ]
+
+        for dr, dc in directions:
+            row, col = r + dr, c + dc
+
+            # Stay inside the board
+            if not (0 <= row < 8 and 0 <= col < 8):
+                continue
+
+            target_piece = board[row][col]
+            target_square_notation = self._to_algebraic(row, col)
+            move_notation = start_square_notation + target_square_notation
+
+            if target_piece == ' ':
+                moves.append(move_notation)  # empty square
+            else:
+                is_white_target = target_piece.isupper()
+                if is_white_knight != is_white_target:
+                    moves.append(move_notation)  # capture enemy
+
+        return moves
+
+    def get_bishop_moves(self, board, r, c):
+        """Generate all possible bishop moves from position (r, c)."""
+        moves = []
+        start_square_notation = self._to_algebraic(r, c)
+        
+        bishop_char = board[r][c]
+        is_white_bishop = bishop_char.isupper()
+
+        directions = [(-1, -1), (-1, 1), (1, 1), (1, -1)] # Up-left, Up-right, Down-right, Down-left
+
+        for dr, dc in directions:
+            row, col = r, c
+            while True:
+                row += dr
+                col += dc
+
+                if not (0 <= row < 8 and 0 <= col < 8):
+                    break
+
+                target_piece = board[row][col]
+                target_square_notation = self._to_algebraic(row, col)
+                move_notation = start_square_notation + target_square_notation
+
+                if target_piece == ' ':
+                    moves.append(move_notation)
+                else:
+                    is_white_target = target_piece.isupper()
+                    if is_white_bishop != is_white_target:
+                        moves.append(move_notation)
+                    break
+        
+        return moves
+
+    def get_queen_moves(self, board, r, c):
+        """Generate all possible queen moves from position (r, c)."""
+        moves = self.get_rook_moves(board, r, c) + self.get_bishop_moves(board, r, c)
+        return moves
+
+    def get_king_moves(self, board, r, c):
+        """Generate all possible king moves from position (r, c)."""
+        moves = []
+        start_square_notation = self._to_algebraic(r, c)
+        
+        king_char = board[r][c]
+        is_white_king = king_char.isupper()
+
+        directions = [
+            (-1, -1), (-1, 0), (-1, 1),
+            ( 0, -1),          ( 0, 1),
+            ( 1, -1), ( 1, 0), ( 1, 1)
+        ]
+        for dr, dc in directions:
+            row, col = r, c
+            row += dr
+            col += dc
+
+            if not (0 <= row < 8 and 0 <= col < 8):
+                break
+
+            target_piece = board[row][col]
+            target_square_notation = self._to_algebraic(row, col)
+            move_notation = start_square_notation + target_square_notation
+
+            if target_piece == ' ':
+                moves.append(move_notation)
+            else:
+                is_white_target = target_piece.isupper()
+                if is_white_king != is_white_target:
+                    moves.append(move_notation)
+        return moves
+
+    def get_pawn_moves(self, board, r, c):
+        moves = []
+        start_square_notation = self._to_algebraic(r, c)
+
+        pawn_char = board[r][c]
+        is_white_pawn = pawn_char.isupper()
+
+        rank = int(start_square_notation[1])
+
+        # Forward movement
+        direction = -1 if is_white_pawn else 1
+        one_step_row, one_step_col = r + direction, c
+        if 0 <= one_step_row < 8 and board[one_step_row][one_step_col] == ' ':
+            move_notation = start_square_notation + self._to_algebraic(one_step_row, one_step_col)
+            moves.append(move_notation)
+
+            # Two-step move from starting rank
+            start_rank = 2 if is_white_pawn else 7
+            if rank == start_rank:
+                two_step_row = r + 2 * direction
+                if 0 <= two_step_row < 8 and board[two_step_row][c] == ' ':
+                    move_notation = start_square_notation + self._to_algebraic(two_step_row, c)
+                    moves.append(move_notation)
+
+        # Attacks
+        attack_directions = [(direction, -1), (direction, 1)]
+        for dr, dc in attack_directions:
+            row, col = r + dr, c + dc
+            if not (0 <= row < 8 and 0 <= col < 8):
+                continue
+            target_piece = board[row][col]
+            if target_piece != ' ':
+                is_white_target = target_piece.isupper()
+                if is_white_pawn != is_white_target:
+                    move_notation = start_square_notation + self._to_algebraic(row, col)
+                    moves.append(move_notation)
+
+        return moves
 
     def _create_new_state_from_move(self, current_state: GameState, move: str) -> GameState:
         ...
