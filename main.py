@@ -444,3 +444,32 @@ class ChessEngine:
             print() # Newline for the next rank
         print("  +-----------------")
         print("    a b c d e f g h")
+
+    def print_board_unicode(self):
+        """Print board using Unicode chess symbols."""
+        unicode_pieces = {
+            'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
+            'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟',
+            ' ': '·'
+        }
+        
+        board = self.current_state.board
+        print("\n  ╔══════════════════════════╗")
+        for r in range(8):
+            print(f"{8-r} ║ ", end="")
+            for c in range(8):
+                piece = unicode_pieces[board[r][c]]
+                # Alternate background colors
+                if (r + c) % 2 == 0:
+                    print(f" {piece} ", end="")
+                else:
+                    print(f" {piece} ", end="")
+            print(" ║")
+        print("  ╚══════════════════════════╝")
+        print("    a b c d e f g h")
+        print(f"\nTurn: {'White' if self.current_state.turn == 'w' else 'Black'}")
+        print(f"Castling: {self.current_state.castling_rights or 'None'}")
+        print(f"En passant: {self.current_state.en_passant_target or 'None'}")
+        print(f"Halfmove clock: {self.current_state.halfmove_clock}")
+        print(f"Move: {self.current_state.fullmove_number}")
+
