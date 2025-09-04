@@ -561,6 +561,24 @@ class ChessEngine:
         row = 8 - int(rank)
         return row, col
     
+    def _find_move_between_states(self, prev: GameState, curr: GameState) -> str:
+        """Find what move was made between two states."""
+        for r in range(8):
+            for c in range(8):
+                if prev.board[r][c] != curr.board[r][c]:
+                    if prev.board[r][c] != ' ' and curr.board[r][c] == ' ':
+                        # This is the source square
+                        start = self._to_algebraic(r, c)
+                        # Find destination
+                        for r2 in range(8):
+                            for c2 in range(8):
+                                if prev.board[r2][c2] != curr.board[r2][c2]:
+                                    if r2 != r or c2 != c:
+                                        if curr.board[r2][c2] == prev.board[r][c]:
+                                            end = self._to_algebraic(r2, c2)
+                                            return start + end
+        return ""
+    
     def undo_move(self) -> bool:
         """Undo the last move."""
         if len(self.history) <= 1:
@@ -573,9 +591,14 @@ class ChessEngine:
     def get_move_history(self) -> list[str]:
         """Get list of moves played."""
         moves = []
-        for i in range(1, len(self.history)):   
+        for i in range(1, len(self.history)):
             prev_state = self.history[i-1]
-        return []
+            curr_state = self.history[i]
+            # Find the move that was made by comparing boards
+            move = self._find_move_between_states(prev_state, curr_state)
+            if move:
+                moves.append(move)
+        return moves
     
     def print_board(self):
         """Prints the current board state to the console."""
