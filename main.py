@@ -386,6 +386,68 @@ class ChessEngine:
         
         return moves
 
+    def handle_promotion(self, move: str, promotion_piece: str = 'q') -> str:
+        """Add promotion piece to move notation if pawn reaches last rank."""
+        start_row, start_col = self._from_algebraic(move[:2])
+        end_row, end_col = self._from_algebraic(move[2:4])
+        piece = self.current_state.board[start_row][start_col]
+        
+        if piece.lower() == 'p':
+            if (piece.isupper() and end_row == 0) or (piece.islower() and end_row == 7):
+                return move + promotion_piece.lower()
+        return move
+
+    # Game state checking
+    def is_checkmate(self, state: GameState) -> bool:
+        """Check if the current position is checkmate."""
+        is_white = state.turn == 'w'
+        if not self._is_king_in_check(state.board, is_white):
+            return False
+        
+        # If in check and no legal moves, it's checkmate
+        return len(self.get_all_legal_moves(state)) == 0
+
+    def is_stalemate(self, state: GameState) -> bool:
+        """Check if the current position is stalemate."""
+        is_white = state.turn == 'w'
+        if self._is_king_in_check(state.board, is_white):
+            return False
+        
+        # If not in check and no legal moves, it's stalemate
+        return len(self.get_all_legal_moves(state)) == 0
+
+    def is_draw_by_insufficient_material(self, state: GameState) -> bool:
+        """Check if the position is a draw due to insufficient material."""
+        pieces = []
+        for row in state.board:
+            for piece in row:
+                if piece != ' ':
+                    pieces.append(piece.lower())
+        
+        # Remove kings
+        pieces = [p for p in pieces if p != 'k']
+        
+        # Draw conditions
+        if len(pieces) == 0:  # Only kings
+            return True
+        if len(pieces) == 1 and pieces[0] in ['b', 'n']:  # King + bishop or knight
+            return True
+        if len(pieces) == 2 and all(p == 'b' for p in pieces):
+            # Check if bishops are on same color
+            bishops = []
+            for r in range(8):
+                for c in range(8):
+                    if state.board[r][c].lower() == 'b':
+                        bishops.append((r + c) % 2)
+            if len(set(bishops)) == 1:  # Same color bishops
+                return True
+        
+        return False
+
+    def is_fifty_move_rule(self, state: GameState) -> bool:
+        """Check if 50 moves have been made without pawn move or capture."""
+        return state.halfmove_clock >= 100  # 50 moves = 100 half-moves
+
     # Check detection methods
     def _is_square_attacked(self, board, row: int, col: int, is_attacked_by_white: bool) -> bool:
         """
@@ -498,6 +560,22 @@ class ChessEngine:
         col = ord(file) - ord('a')
         row = 8 - int(rank)
         return row, col
+    
+    def undo_move(self) -> bool:
+        """Undo the last move."""
+        if len(self.history) <= 1:
+            return False
+        
+        self.history.pop()
+        self.current_state = self.history[-1]
+        return True
+
+    def get_move_history(self) -> list[str]:
+        """Get list of moves played."""
+        moves = []
+        for i in range(1, len(self.history)):   
+            prev_state = self.history[i-1]
+        return []
     
     def print_board(self):
         """Prints the current board state to the console."""
