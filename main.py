@@ -1,8 +1,10 @@
 from dataclasses import dataclass
 
+Board = tuple[tuple[str, ...], ...]
+
 @dataclass(frozen=True)
 class GameState:
-    board: tuple[tuple[str, ...], ...]
+    board: Board
     turn: str
     castling_rights: str
     en_passant_target: str | None
@@ -24,6 +26,7 @@ class ChessEngine:
         }
 
     def _get_initial_state(self) -> GameState:
+        """Get starting state."""
         board = (
             ('r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'), # 8
             ('p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'), # 7
@@ -44,7 +47,8 @@ class ChessEngine:
             fullmove_number=1, 
         )
 
-    def make_move(self, move: str):
+    # Main move execution methods
+    def make_move(self, move: str) -> None:
         legal_moves = self.get_all_legal_moves(self.current_state)
 
         if move not in legal_moves:
@@ -142,8 +146,9 @@ class ChessEngine:
                             legal_moves.append(move)
                             
         return legal_moves
-    
-    def get_rook_moves(self, board, r, c):
+
+    # Piece move generation methods
+    def get_rook_moves(self, board: Board, r: int, c: int) -> list[str]:
         """Generate all possible rook moves from position (r, c)."""
         moves = []
         start_square_notation = self._to_algebraic(r, c)
@@ -176,7 +181,7 @@ class ChessEngine:
         
         return moves
 
-    def get_knight_moves(self, board, r, c):
+    def get_knight_moves(self, board: Board, r: int, c: int) -> list[str]:
         """Generate all possible knight moves from position (r, c)."""
         moves = []
         start_square_notation = self._to_algebraic(r, c)
@@ -212,7 +217,7 @@ class ChessEngine:
 
         return moves
 
-    def get_bishop_moves(self, board, r, c):
+    def get_bishop_moves(self, board: Board, r: int, c: int) -> list[str]:
         """Generate all possible bishop moves from position (r, c)."""
         moves = []
         start_square_notation = self._to_algebraic(r, c)
@@ -245,12 +250,12 @@ class ChessEngine:
         
         return moves
 
-    def get_queen_moves(self, board, r, c):
+    def get_queen_moves(self, board: Board, r: int, c: int) -> list[str]:
         """Generate all possible queen moves from position (r, c)."""
         moves = self.get_rook_moves(board, r, c) + self.get_bishop_moves(board, r, c)
         return moves
 
-    def get_king_moves(self, board, r, c):
+    def get_king_moves(self, board: Board, r: int, c: int) -> list[str]:
         """Generate all possible king moves from position (r, c)."""
         moves = []
         start_square_notation = self._to_algebraic(r, c)
@@ -283,7 +288,7 @@ class ChessEngine:
                     moves.append(move_notation)
         return moves
 
-    def get_pawn_moves(self, board, r, c):
+    def get_pawn_moves(self, board: Board, r: int, c: int) -> list[str]:
         """Generate all possible pawn moves from position (r, c)."""
         moves = []
         start_square_notation = self._to_algebraic(r, c)
@@ -323,6 +328,65 @@ class ChessEngine:
 
         return moves
 
+    def get_casteling_moves(self, state: GameState) -> list[str]:
+        """Generate castling moves if legal."""
+        moves = []
+        board = state.board
+        is_white = state.turn == 'w'
+
+        if is_white:
+            if 'K' in state.castling_rights and board[7][5] == ' ' and board[7][6] == ' ':
+                # Check if squares are not under attack
+                if not self._is_king_in_check(board, True):
+                    if not self._is_square_attacked(board, 7, 5, False):
+                        if not self._is_square_attacked(board, 7, 6, False):
+                            moves.append('e1g1')
+            
+            if 'Q' in state.castling_rights and board[7][3] == ' ' and board[7][2] == ' ' and board[7][1] == ' ':
+                if not self._is_king_in_check(board, True):
+                    if not self._is_square_attacked(board, 7, 3, False):
+                        if not   self._is_square_attacked(board, 7, 2, False):
+                            moves.append('e1c1')
+        
+        else:
+            if 'k' in state.castling_rights and board[0][5] == ' ' and board[0][6] == ' ':
+                if not self._is_king_in_check(board, False):
+                    if not self._is_square_attacked(board, 0, 5, True):
+                        if not self._is_square_attacked(board, 0, 6, True):
+                            moves.append('e8g8')
+            
+            if 'q' in state.castling_rights and board[0][3] == ' ' and board[0][2] == ' ' and board[0][1] == ' ':
+                if not self._is_king_in_check(board, False):
+                    if not self._is_square_attacked(board, 0, 3, True):
+                        if not self._is_square_attacked(board, 0, 2, True):
+                            moves.append('e8c8')
+        
+        return moves
+
+    def get_en_passant_moves(self, state: GameState, r: int, c: int) -> list[str]:
+        """Generate en passant capture if available."""
+        moves = []
+        if state.en_passant_target is None:
+            return moves
+
+        board = state.board
+        piece = board[r][c]
+        if piece.lower() != 'p':
+            return moves
+        
+        is_white_pawn = piece.isupper()
+        ep_row, ep_col = self._from_algebraic(state.en_passant_target)
+    
+        # Check if pawn is on correct rank for en passant
+        if (is_white_pawn and r == 3) or (not is_white_pawn and r == 4):
+            # Check if pawn is adjacent to en passant target
+            if abs(c - ep_col) == 1:
+                start = self._to_algebraic(r, c)
+                moves.append(start + state.en_passant_target)
+        
+        return moves
+
+    # Check detection methods
     def _is_square_attacked(self, board, row: int, col: int, is_attacked_by_white: bool) -> bool:
         """
         Checks if a specific square (row, col) is under attack by the given side.
@@ -400,22 +464,9 @@ class ChessEngine:
         if king_pos is None: return False # Should not happen in a real game
         
         return self._is_square_attacked(board, king_pos[0], king_pos[1], not is_white_king)
-    
-    def _to_algebraic(self, row, col) -> str:
-        """Helper to convert (row, col) to algebraic notation like 'a1'."""
-        file = chr(ord('a') + col)
-        rank = str(8 - row)
-        return file + rank
-    
-    def _from_algebraic(self, notation: str) -> tuple[int, int]:
-        """Helper to convert 'a1' to (row, col)."""
-        file = notation[0]
-        rank = notation[1]
-        col = ord(file) - ord('a')
-        row = 8 - int(rank)
-        return row, col
 
-    def _get_next_board_state(self, board, move: str) -> tuple[tuple[str, ...], ...]:
+    # Board manipulation methods
+    def _get_next_board_state(self, board, move: str) -> Board:
         """Creates a new board tuple with a move applied."""
         start_pos, end_pos = move[:2], move[2:]
         start_row, start_col = self._from_algebraic(start_pos)
@@ -432,6 +483,21 @@ class ChessEngine:
         
         # Convert back to a tuple of tuples to be stored in a GameState
         return tuple(tuple(row) for row in new_board)
+
+    # Utility methods
+    def _to_algebraic(self, row, col) -> str:
+        """Helper to convert (row, col) to algebraic notation like 'a1'."""
+        file = chr(ord('a') + col)
+        rank = str(8 - row)
+        return file + rank
+    
+    def _from_algebraic(self, notation: str) -> tuple[int, int]:
+        """Helper to convert 'a1' to (row, col)."""
+        file = notation[0]
+        rank = notation[1]
+        col = ord(file) - ord('a')
+        row = 8 - int(rank)
+        return row, col
     
     def print_board(self):
         """Prints the current board state to the console."""
