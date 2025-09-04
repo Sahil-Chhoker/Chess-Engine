@@ -28,8 +28,8 @@ class ChessEngine:
     def _get_initial_state(self) -> GameState:
         """Get starting state."""
         board = (
-            ('r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'), # 8
-            ('p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'), # 7
+            ('r', 'n', 'b', 'q', 'k', 'b', 'n', ' '), # 8
+            ('p', 'p', 'p', 'p', 'p', 'p', 'p', 'P'), # 7
             (' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '), # 6
             (' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '), # 5
             (' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '), # 4
@@ -122,9 +122,10 @@ class ChessEngine:
 
     def get_all_legal_moves(self, state: GameState) -> list[str]:
         """Generate all legal moves for the current game state."""
-        legal_moves = []
+        pseudo_legal_moves = []
         is_white_turn = state.turn == 'w'
 
+        # Generate standard piece moves
         for r in range(8):
             for c in range(8):
                 piece = state.board[r][c]
@@ -134,17 +135,24 @@ class ChessEngine:
                 is_white_piece = piece.isupper()
 
                 if is_white_turn == is_white_piece:
-                    pseudo_moves = self.move_calculators[piece.lower()](state.board, r, c)
+                    # Add standard moves
+                    pseudo_legal_moves.extend(self.move_calculators[piece.lower()](state.board, r, c))
                     
-                    for move in pseudo_moves:
-                        # Create a temporary board to test the move
-                        temp_board = self._get_next_board_state(state.board, move)
-                        
-                        # Check if the king is vulnerable on this temporary board
-                        if not self._is_king_in_check(temp_board, is_white_turn):
-                            # If the king is NOT in check, the move is legal
-                            legal_moves.append(move)
-                            
+                    # Add en passant moves specifically for pawns
+                    if piece.lower() == 'p':
+                        pseudo_legal_moves.extend(self.get_en_passant_moves(state, r, c))
+
+        # Add castling moves
+        pseudo_legal_moves.extend(self.get_casteling_moves(state))
+        
+        # Filter all generated moves for legality
+        legal_moves = []
+        for move in pseudo_legal_moves:
+            temp_board = self._get_next_board_state(state.board, move) 
+            
+            if not self._is_king_in_check(temp_board, is_white_turn):
+                legal_moves.append(move)
+                
         return legal_moves
 
     # Piece move generation methods
@@ -397,7 +405,7 @@ class ChessEngine:
                 return move + promotion_piece.lower()
         return move
 
-    # Game state checking
+    # Game state checkin2g
     def is_checkmate(self, state: GameState) -> bool:
         """Check if the current position is checkmate."""
         is_white = state.turn == 'w'
@@ -539,11 +547,36 @@ class ChessEngine:
         # Create a mutable list of lists from the board tuple
         new_board = [list(row) for row in board]
         
-        # Make the move
+        # Standard move
         new_board[start_row][start_col] = ' '
         new_board[end_row][end_col] = piece
-        
-        # Convert back to a tuple of tuples to be stored in a GameState
+
+        # Handle special moves
+        if piece.lower() == 'p':
+            # Pawn Promotion (e.g., 'e7e8q')
+            if len(move) == 5:
+                promotion_piece = move[4]
+                new_board[end_row][end_col] = promotion_piece.upper() if piece.isupper() else promotion_piece.lower()
+            # En Passant
+            elif start_col != end_col and board[end_row][end_col] == ' ':
+                captured_pawn_row = start_row
+                captured_pawn_col = end_col
+                new_board[captured_pawn_row][captured_pawn_col] = ' '
+
+        elif piece.lower() == 'k':
+            # Castling
+            if abs(start_col - end_col) == 2:
+                # Kingside castling
+                if end_col > start_col:
+                    rook_start_col, rook_end_col = 7, 5
+                # Queenside castling
+                else:
+                    rook_start_col, rook_end_col = 0, 3
+                
+                rook = new_board[start_row][rook_start_col]
+                new_board[start_row][rook_end_col] = rook
+                new_board[start_row][rook_start_col] = ' '
+                
         return tuple(tuple(row) for row in new_board)
 
     # Utility methods
@@ -633,7 +666,7 @@ class ChessEngine:
                     print(f" {piece} ", end="")
             print(" ║")
         print("  ╚══════════════════════════╝")
-        print("    a b c d e f g h")
+        print("      a  b  c  d  e  f  g  h")
         print(f"\nTurn: {'White' if self.current_state.turn == 'w' else 'Black'}")
         print(f"Castling: {self.current_state.castling_rights or 'None'}")
         print(f"En passant: {self.current_state.en_passant_target or 'None'}")
