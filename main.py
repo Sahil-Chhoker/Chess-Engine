@@ -28,8 +28,8 @@ class ChessEngine:
     def _get_initial_state(self) -> GameState:
         """Get starting state."""
         board = (
-            ('r', 'n', 'b', 'q', 'k', 'b', 'n', ' '), # 8
-            ('p', 'p', 'p', 'p', 'p', 'p', 'p', 'P'), # 7
+            ('r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'), # 8
+            ('p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'), # 7
             (' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '), # 6
             (' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '), # 5
             (' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '), # 4
@@ -334,7 +334,13 @@ class ChessEngine:
                     move_notation = start_square_notation + self._to_algebraic(row, col)
                     moves.append(move_notation)
 
-        return moves
+        # Include promotion moves
+        final_moves = []
+        for move in moves:
+            for promotion_piece in ['r', 'n', 'b', 'q']:
+                final_moves.append(self.handle_promotion(move, promotion_piece))
+
+        return final_moves
 
     def get_casteling_moves(self, state: GameState) -> list[str]:
         """Generate castling moves if legal."""
