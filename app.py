@@ -1,112 +1,115 @@
-import streamlit as st
-from PIL import Image
-import os
-from main import Board
-base_path = os.path.dirname(__file__)
+# app.py - Flask backend
+from flask import Flask, render_template, jsonify, request
+from main import ChessEngine
+import json
 
-def load_chess_assets(base_path: str):
-    """
-    Load chess board and piece images with alpha channel enabled.
-    
-    Args:
-        base_path (str): The root directory where assets are stored.
-    
-    Returns:
-        tuple: (board_image, pieces_dict)
-            - board_image: PIL.Image of the chess board
-            - pieces_dict: dict mapping piece symbols to PIL.Images
-    """
-    board_path = os.path.join(base_path, "assets", "board.png")
-    board = Image.open(board_path).convert("RGBA")
+app = Flask(__name__)
+app.secret_key = "your-secret-key-here"
 
-    piece_files = {
-        'p': "black-pawn.png",
-        'r': "black-rook.png",
-        'n': "black-knight.png",
-        'b': "black-bishop.png",
-        'q': "black-queen.png",
-        'k': "black-king.png",
-        'P': "white-pawn.png",
-        'R': "white-rook.png",
-        'N': "white-knight.png",
-        'B': "white-bishop.png",
-        'Q': "white-queen.png",
-        'K': "white-king.png",
-    }
-
-    pieces = {}
-    for key, filename in piece_files.items():
-        path = os.path.join(base_path, "assets", "pieces-png", filename)
-        pieces[key] = Image.open(path).convert("RGBA").resize((90, 90))
-
-    return board, pieces
-
-def create_board_image(board: Board):
-    board_img, pieces_img = load_chess_assets(base_path)
-    board_copy = board_img.copy()
-    x_padding, y_padding = 10, 12 # For boundries
-    x_offset, y_offset = 96, 96 # For each square
-
-    for i in range(8):
-        for j in range(8):
-            piece = board[i][j]
-            if piece != ' ':
-                x = j * x_offset + x_padding
-                y = i * y_offset + y_padding
-                board_copy.paste(pieces_img[piece], (x, y), pieces_img[piece])
-    return board_copy
+# Global game instance (in production, use sessions or database)
+game_engine = ChessEngine()
 
 
-st.write(
-    """# Chess Engine"""
-)
-
-board = (
-    ("r", "n", "b", "q", "k", "b", "n", "r"),  # 8
-    ("p", "p", "p", "p", "p", "p", "p", "p"),  # 7
-    (" ", " ", " ", " ", " ", " ", " ", " "),  # 6
-    (" ", " ", " ", " ", " ", " ", " ", " "),  # 5
-    (" ", " ", " ", " ", " ", " ", " ", " "),  # 4
-    (" ", " ", " ", " ", " ", " ", "P", " "),  # 3
-    ("P", "P", "P", "P", "P", "P", " ", "P"),  # 2
-    ("R", "N", "B", "Q", "K", "B", "N", "R"),  # 1
-    # a    b    c    d    e    f    g    h
-)
+@app.route("/")
+def index():
+    return render_template("chess.html")
 
 
-def hide_buttons():
-    st.markdown(
-        """
-        <style>
-        .stButton > button {
-            visibility: hidden;
+@app.route("/api/board_state")
+def get_board_state():
+    """Get current board state and game info"""
+    state = game_engine.current_state
+    return jsonify(
+        {
+            "board": state.board,
+            "turn": state.turn,
+            "is_checkmate": game_engine.is_checkmate(state),
+            "is_stalemate": game_engine.is_stalemate(state),
+            "move_history": game_engine.get_move_history(),
         }
-        </style>
-        """,
-        unsafe_allow_html=True,
     )
 
-st.title("Clickable Button Grid")
 
-def create_clickable_grid(rows, cols):
-    st.title("Clickable Grid Example")
-    clicked_cell = None
+@app.route("/api/legal_moves")
+def get_legal_moves():
+    """Get legal moves for a piece at given square"""
+    square = request.args.get("square")
+    if not square:
+        return jsonify({"moves": []})
 
-    for r in range(rows):
-        # Create a row of columns
-        row_cols = st.columns(cols)
-        for c in range(cols):
-            with row_cols[c]:
-                # Create a button for each cell
-                button_label = f"Cell ({r},{c})"
-                # Use a unique key for each button
-                if st.button(button_label, width=400, type='tertiary'):
-                    clicked_cell = (r, c)
+    all_moves = game_engine.get_all_legal_moves(game_engine.current_state)
+    piece_moves = [move for move in all_moves if move.startswith(square)]
+    return jsonify({"moves": piece_moves})
 
-    if clicked_cell:
-        st.write(f"You clicked on: Cell ({clicked_cell[0]},{clicked_cell[1]})")
 
-# Create a 3x3 clickable grid
-create_clickable_grid(8, 8)
+@app.route("/api/make_move", methods=["POST"])
+def make_move():
+    """Make a move and return updated game state"""
+    data = request.get_json()
+    move = data.get("move")
 
-st.image(create_board_image(board))
+    try:
+        # Check if it's a promotion move
+        all_moves = game_engine.get_all_legal_moves(game_engine.current_state)
+        if move in all_moves:
+            game_engine.make_move(move)
+        elif f"{move}q" in all_moves:  # Auto-promote to queen
+            game_engine.make_move(f"{move}q")
+        else:
+            return jsonify({"success": False, "error": "Invalid move"})
+
+        state = game_engine.current_state
+        return jsonify(
+            {
+                "success": True,
+                "board": state.board,
+                "turn": state.turn,
+                "is_checkmate": game_engine.is_checkmate(state),
+                "is_stalemate": game_engine.is_stalemate(state),
+                "move_history": game_engine.get_move_history(),
+            }
+        )
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/undo_move", methods=["POST"])
+def undo_move():
+    """Undo the last move"""
+    try:
+        game_engine.undo_move()
+        state = game_engine.current_state
+        return jsonify(
+            {
+                "success": True,
+                "board": state.board,
+                "turn": state.turn,
+                "is_checkmate": game_engine.is_checkmate(state),
+                "is_stalemate": game_engine.is_stalemate(state),
+                "move_history": game_engine.get_move_history(),
+            }
+        )
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/new_game", methods=["POST"])
+def new_game():
+    """Start a new game"""
+    global game_engine
+    game_engine = ChessEngine()
+    state = game_engine.current_state
+    return jsonify(
+        {
+            "success": True,
+            "board": state.board,
+            "turn": state.turn,
+            "is_checkmate": False,
+            "is_stalemate": False,
+            "move_history": [],
+        }
+    )
+
+
+if __name__ == "__main__":
+    app.run(debug=True, port=5000)

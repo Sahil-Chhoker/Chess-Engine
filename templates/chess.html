@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Responsive Chess Game</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .game-container {
+      display: flex;
+      gap: 30px;
+      background: rgba(255,255,255,0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 30px;
+      box-shadow: 0 8px 32px 0 rgba(31,38,135,0.37);
+      border: 1px solid rgba(255,255,255,0.18);
+    }
+
+    .chess-board {
+      width: 640px;
+      height: 640px;
+      border: 3px solid #8B4513;
+      border-radius: 10px;
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      grid-template-rows: repeat(8, 1fr);
+      gap: 0;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .square {
+      width: 80px;
+      height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.15s ease;
+    }
+
+    .square.light { background-color: #f0d9b5; }
+    .square.dark  { background-color: #b58863; }
+
+    .square.selected {
+      background-color: #20B2AA !important;
+      box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
+    }
+
+    .square.legal-move { position: relative; }
+    .square.legal-move::after {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background-color: rgba(34,139,34,0.7);
+      border-radius: 50%;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      animation: pulse 1.5s infinite;
+    }
+
+    .square.legal-move.has-piece::after {
+      width: 70px;
+      height: 70px;
+      background-color: rgba(255,59,59,0.4);
+      border: 3px solid rgba(255,59,59,0.8);
+      border-radius: 50%;
+    }
+
+    .square.drag-over {
+      background-color: rgba(0,255,0,0.12) !important;
+      transform: scale(0.98);
+      transition: all 0.12s ease;
+    }
+
+    .square.invalid-drop {
+      background-color: rgba(255,0,0,0.12) !important;
+      animation: invalidDrop 0.3s ease;
+    }
+
+    @keyframes invalidDrop {
+      0%,100% { transform: scale(1); }
+      50% { transform: scale(0.95); }
+    }
+
+    @keyframes pulse {
+      0% { transform: translate(-50%,-50%) scale(1); opacity: 0.7; }
+      50% { transform: translate(-50%,-50%) scale(1.2); opacity: 0.4; }
+      100% { transform: translate(-50%,-50%) scale(1); opacity: 0.7; }
+    }
+
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
+    }
+
+    .piece {
+      width: 70px;
+      height: 70px;
+      cursor: grab;
+      user-select: none;
+      transition: transform 0.2s ease;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 60px;
+      line-height: 1;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .piece:hover { transform: scale(1.05); }
+    .piece:active { cursor: grabbing; }
+    .piece.dragging {
+      opacity: 0.85;
+      transform: scale(1.08);
+      z-index: 1000;
+    }
+
+    /* white / black piece colors */
+    .piece.K, .piece.Q, .piece.R, .piece.B, .piece.N, .piece.P { color: #fff; }
+    .piece.k, .piece.q, .piece.r, .piece.b, .piece.n, .piece.p { color: #333; }
+
+    .game-info { width: 300px; color: white; }
+
+    .game-info h1 {
+      font-size: 2em;
+      margin-bottom: 20px;
+      text-align: center;
+      color: #fff;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    }
+
+    .status-panel {
+      background: rgba(255,255,255,0.1);
+      border-radius: 15px;
+      padding: 20px;
+      margin-bottom: 20px;
+      backdrop-filter: blur(5px);
+    }
+
+    .turn-indicator {
+      font-size: 1.3em;
+      font-weight: bold;
+      text-align: center;
+      padding: 10px;
+      border-radius: 10px;
+      margin-bottom: 15px;
+      transition: all 0.3s ease;
+    }
+
+    .turn-indicator.white-turn { background: linear-gradient(45deg,#ffffff,#f0f0f0); color: #333; }
+    .turn-indicator.black-turn { background: linear-gradient(45deg,#333,#555); color: #fff; }
+
+    .game-status { text-align: center; font-size: 1.1em; margin-bottom: 15px; }
+    .game-status.checkmate { color: #ff4757; font-weight: bold; animation: flash 1s infinite; }
+    .game-status.stalemate { color: #ffa502; font-weight: bold; }
+
+    @keyframes flash { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+    .controls { display:flex; flex-direction: column; gap:10px; margin-bottom: 20px; }
+
+    .btn {
+      padding: 12px 20px; border: none; border-radius: 10px;
+      font-size: 1em; font-weight: bold; cursor: pointer; transition: all 0.2s ease;
+      text-transform: uppercase;
+    }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+    .btn.primary { background: linear-gradient(45deg,#4CAF50,#45a049); color: white; }
+    .btn.secondary { background: linear-gradient(45deg,#2196F3,#1976D2); color: white; }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none !important; }
+
+    .move-history {
+      background: rgba(255,255,255,0.1); border-radius: 15px; padding: 20px; backdrop-filter: blur(5px);
+    }
+    .move-history h3 { margin-bottom: 15px; text-align:center; }
+    .history-list {
+      max-height: 200px; overflow-y: auto; font-family: 'Courier New', monospace; line-height: 1.4;
+    }
+    .history-list::-webkit-scrollbar { width: 6px; }
+    .history-list::-webkit-scrollbar-track { background: rgba(255,255,255,0.1); border-radius: 3px; }
+    .history-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 3px; }
+
+    .loading { opacity: 0.7; pointer-events: none; }
+
+    @media (max-width: 768px) {
+      .game-container { flex-direction: column; align-items: center; padding: 20px; }
+      .chess-board { width: 320px; height: 320px; }
+      .square { width: 40px; height: 40px; }
+      .piece { width: 35px; height: 35px; font-size: 30px; }
+      .game-info { width: 320px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="game-container">
+    <div class="chess-board" id="chessBoard"></div>
+
+    <div class="game-info">
+      <h1>♔ Chess Engine ♛</h1>
+
+      <div class="status-panel">
+        <div class="turn-indicator" id="turnIndicator">White to move</div>
+        <div class="game-status" id="gameStatus"></div>
+      </div>
+
+      <div class="controls">
+        <button class="btn primary" id="newGameBtn">New Game</button>
+        <button class="btn secondary" id="undoBtn">Undo Move</button>
+      </div>
+
+      <div class="move-history">
+        <h3>Move History</h3>
+        <div class="history-list" id="moveHistory"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    class ChessGUI {
+      constructor() {
+        this.board = [];
+        this.selectedSquare = null;
+        this.legalMoves = [];
+        this.turn = 'w';
+        this.gameStatus = '';
+        this.draggedPiece = null;
+        this.dragStartSquare = null;
+
+        this.pieceSymbols = {
+          'K': '♔','Q': '♕','R': '♖','B': '♗','N': '♘','P': '♙',
+          'k': '♚','q': '♛','r': '♜','b': '♝','n': '♞','p': '♟'
+        };
+
+        this.initializeBoard();
+        this.loadGameState();
+        this.attachEventListeners();
+      }
+
+      initializeBoard() {
+        const boardElement = document.getElementById('chessBoard');
+        boardElement.innerHTML = '';
+
+        for (let row = 0; row < 8; row++) {
+          for (let col = 0; col < 8; col++) {
+            const square = document.createElement('div');
+            square.className = `square ${(row + col) % 2 === 0 ? 'light' : 'dark'}`;
+            square.dataset.row = row;
+            square.dataset.col = col;
+            square.dataset.square = this.toAlgebraic(row, col);
+
+            square.addEventListener('click', (e) => this.handleSquareClick(e));
+            square.addEventListener('dragover', (e) => this.handleDragOver(e));
+            square.addEventListener('dragenter', (e) => this.handleDragEnter(e));
+            square.addEventListener('dragleave', (e) => this.handleDragLeave(e));
+            square.addEventListener('drop', (e) => this.handleDrop(e));
+
+            boardElement.appendChild(square);
+          }
+        }
+      }
+
+      toAlgebraic(row, col) {
+        return String.fromCharCode(97 + col) + (8 - row);
+      }
+
+      fromAlgebraic(square) {
+        const col = square.charCodeAt(0) - 97;
+        const row = 8 - parseInt(square[1], 10);
+        return [row, col];
+      }
+
+      async loadGameState() {
+        try {
+          const response = await fetch('/api/board_state');
+          if (!response.ok) throw new Error('Failed to load board state');
+          const data = await response.json();
+          this.updateGameState(data);
+        } catch (error) {
+          console.error('Error loading game state:', error);
+        }
+      }
+
+      updateGameState(data) {
+        this.board = data.board;
+        this.turn = data.turn;
+        this.renderBoard();
+        this.updateUI(data);
+      }
+
+      renderBoard() {
+        const squares = document.querySelectorAll('.square');
+        squares.forEach(square => {
+          const row = parseInt(square.dataset.row, 10);
+          const col = parseInt(square.dataset.col, 10);
+          const piece = this.board[row][col];
+
+          square.innerHTML = '';
+          square.classList.remove('has-piece');
+
+          if (piece !== ' ' && piece !== null && piece !== undefined) {
+            const pieceElement = document.createElement('div');
+            pieceElement.className = `piece ${piece}`;
+            pieceElement.textContent = this.pieceSymbols[piece] || '';
+            pieceElement.draggable = true;
+            pieceElement.dataset.piece = piece;
+            pieceElement.dataset.square = square.dataset.square;
+
+            pieceElement.addEventListener('dragstart', (e) => this.handleDragStart(e));
+            pieceElement.addEventListener('dragend', (e) => this.handleDragEnd(e));
+
+            square.appendChild(pieceElement);
+            square.classList.add('has-piece');
+          }
+        });
+      }
+
+      handleDragStart(e) {
+        const piece = e.target.dataset.piece;
+        const square = e.target.dataset.square;
+
+        if (!this.isPieceOfCurrentTurn(piece)) {
+          e.preventDefault();
+          return;
+        }
+
+        this.draggedPiece = e.target;
+        this.dragStartSquare = square;
+        this.selectedSquare = square;
+
+        setTimeout(() => e.target.classList.add('dragging'), 0);
+
+        const squareElement = document.querySelector(`[data-square="${square}"]`);
+        if (squareElement) squareElement.classList.add('selected');
+
+        this.showLegalMoves(square).catch(()=>{});
+
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', square);
+
+        try {
+          e.dataTransfer.setDragImage(e.target, Math.round(e.target.offsetWidth / 2), Math.round(e.target.offsetHeight / 2));
+        } catch (err) {
+          // ignore; some browsers may restrict setDragImage
+        }
+      }
+
+      handleDragEnd(e) {
+        if (this.draggedPiece) {
+          this.draggedPiece.classList.remove('dragging');
+          this.draggedPiece = null;
+        }
+
+        setTimeout(() => {
+          this.clearHighlights();
+          this.selectedSquare = null;
+          this.dragStartSquare = null;
+        }, 100);
+      }
+
+      handleDragOver(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+      }
+
+      handleDragEnter(e) {
+        e.preventDefault();
+        if (!this.dragStartSquare) return;
+
+        const square = e.currentTarget;
+        const toSquare = square.dataset.square;
+
+        if (toSquare === this.dragStartSquare) return;
+
+        const move = this.dragStartSquare + toSquare;
+        const isLegal = this.legalMoves.some(l => l === move || l.startsWith(move));
+        square.classList.add(isLegal ? 'drag-over' : 'invalid-drop');
+      }
+
+      handleDragLeave(e) {
+        const square = e.currentTarget;
+        square.classList.remove('drag-over', 'invalid-drop');
+      }
+
+      async handleDrop(e) {
+        e.preventDefault();
+        const square = e.currentTarget;
+        const fromSquare = e.dataTransfer.getData('text/plain');
+        const toSquare = square.dataset.square;
+
+        square.classList.remove('drag-over', 'invalid-drop');
+
+        if (!fromSquare || !toSquare || fromSquare === toSquare) return;
+
+        const move = fromSquare + toSquare;
+        const isLegalMove = this.legalMoves.some(legalMove =>
+          legalMove === move || legalMove.startsWith(move)
+        );
+
+        if (isLegalMove) {
+          // small visual feedback
+          square.style.transform = 'scale(0.95)';
+          setTimeout(() => { square.style.transform = ''; }, 150);
+
+          await this.makeMove(move);
+          this.clearHighlights();
+          this.selectedSquare = null;
+          this.dragStartSquare = null;
+        } else {
+          this.animateInvalidMove(fromSquare);
+        }
+      }
+
+      async handleSquareClick(e) {
+        const square = e.currentTarget;
+        const squareAlgebraic = square.dataset.square;
+        const row = parseInt(square.dataset.row, 10);
+        const col = parseInt(square.dataset.col, 10);
+        const piece = this.board[row][col];
+
+        this.clearHighlights();
+
+        if (this.selectedSquare === null) {
+          if (piece !== ' ' && this.isPieceOfCurrentTurn(piece)) {
+            this.selectedSquare = squareAlgebraic;
+            square.classList.add('selected');
+            await this.showLegalMoves(squareAlgebraic);
+          }
+        } else {
+          if (this.selectedSquare === squareAlgebraic) {
+            this.selectedSquare = null;
+          } else if (piece !== ' ' && this.isPieceOfCurrentTurn(piece)) {
+            this.selectedSquare = squareAlgebraic;
+            square.classList.add('selected');
+            await this.showLegalMoves(squareAlgebraic);
+          } else {
+            const move = this.selectedSquare + squareAlgebraic;
+            // When clicking to move, attempt the move.
+            await this.makeMove(move);
+            this.selectedSquare = null;
+          }
+        }
+      }
+
+      async showLegalMoves(square) {
+        try {
+          const response = await fetch(`/api/legal_moves?square=${square}`);
+          if (!response.ok) throw new Error('Failed to fetch legal moves');
+          const data = await response.json();
+          this.legalMoves = data.moves || [];
+
+          // highlight destination squares
+          this.legalMoves.forEach(move => {
+            const toSquare = move.slice(2, 4);
+            const [row, col] = this.fromAlgebraic(toSquare);
+            const squareElement = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+            if (squareElement) squareElement.classList.add('legal-move');
+          });
+        } catch (error) {
+          console.error('Error getting legal moves:', error);
+        }
+      }
+
+      async makeMove(move) {
+        const boardElement = document.getElementById('chessBoard');
+        boardElement.classList.add('loading');
+
+        try {
+          const response = await fetch('/api/make_move', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ move })
+          });
+          if (!response.ok) throw new Error('Move request failed');
+          const data = await response.json();
+
+          if (data.success) {
+            this.updateGameState(data);
+            this.playMoveSound();
+          } else {
+            console.error('Invalid move:', data.error);
+            // animate the piece that was attempted
+            this.animateInvalidMove(this.selectedSquare || this.dragStartSquare || move.slice(0,2));
+          }
+        } catch (error) {
+          console.error('Error making move:', error);
+          this.animateInvalidMove(this.selectedSquare || this.dragStartSquare);
+        } finally {
+          boardElement.classList.remove('loading');
+        }
+      }
+
+      animateInvalidMove(fromSquare) {
+        if (!fromSquare) return;
+        try {
+          const [row, col] = this.fromAlgebraic(fromSquare);
+          const squareElement = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+          const pieceElement = squareElement?.querySelector('.piece');
+          if (pieceElement) {
+            pieceElement.style.animation = 'shake 0.5s ease-in-out';
+            setTimeout(() => { pieceElement.style.animation = ''; }, 500);
+          } else if (squareElement) {
+            // shake whole square if no piece found
+            squareElement.style.animation = 'shake 0.5s ease-in-out';
+            setTimeout(() => { squareElement.style.animation = ''; }, 500);
+          }
+        } catch (e) {
+          // ignore
+        }
+
+        setTimeout(() => {
+          this.clearHighlights();
+          this.selectedSquare = null;
+        }, 300);
+      }
+
+      async undoMove() {
+        try {
+          const response = await fetch('/api/undo_move', { method: 'POST' });
+          if (!response.ok) throw new Error('Undo failed');
+          const data = await response.json();
+          if (data.success) {
+            this.updateGameState(data);
+            this.clearHighlights();
+            this.selectedSquare = null;
+          } else {
+            console.error('Undo failed:', data.error);
+          }
+        } catch (error) {
+          console.error('Error undoing move:', error);
+        }
+      }
+
+      async newGame() {
+        try {
+          const response = await fetch('/api/new_game', { method: 'POST' });
+          if (!response.ok) throw new Error('New game request failed');
+          const data = await response.json();
+          if (data.success) {
+            this.updateGameState(data);
+            this.clearHighlights();
+            this.selectedSquare = null;
+          } else {
+            console.error('New game error:', data.error);
+          }
+        } catch (error) {
+          console.error('Error starting new game:', error);
+        }
+      }
+
+      updateUI(data) {
+        const turnIndicator = document.getElementById('turnIndicator');
+        const gameStatus = document.getElementById('gameStatus');
+        const moveHistory = document.getElementById('moveHistory');
+
+        const turnColor = data.turn === 'w' ? 'White' : 'Black';
+        turnIndicator.textContent = `${turnColor} to move`;
+        turnIndicator.className = `turn-indicator ${data.turn === 'w' ? 'white-turn' : 'black-turn'}`;
+
+        if (data.is_checkmate) {
+          const winner = data.turn === 'w' ? 'Black' : 'White';
+          gameStatus.textContent = `Checkmate! ${winner} wins!`;
+          gameStatus.className = 'game-status checkmate';
+        } else if (data.is_stalemate) {
+          gameStatus.textContent = 'Stalemate!';
+          gameStatus.className = 'game-status stalemate';
+        } else {
+          gameStatus.textContent = data.in_check ? 'Check!' : '';
+          gameStatus.className = 'game-status';
+        }
+
+        const moves = data.move_history || [];
+        let historyText = '';
+        for (let i = 0; i < moves.length; i += 2) {
+          const moveNum = Math.floor(i / 2) + 1;
+          const whiteMove = moves[i] || '';
+          const blackMove = moves[i + 1] || '';
+          historyText += `${moveNum}. ${whiteMove} ${blackMove}\n`;
+        }
+        moveHistory.textContent = historyText;
+      }
+
+      clearHighlights() {
+        document.querySelectorAll('.square').forEach(square => {
+          square.classList.remove('selected', 'legal-move', 'drag-over', 'invalid-drop');
+        });
+      }
+
+      isPieceOfCurrentTurn(piece) {
+        if (!piece) return false;
+        return (this.turn === 'w' && piece === piece.toUpperCase()) ||
+               (this.turn === 'b' && piece === piece.toLowerCase());
+      }
+
+      playMoveSound() {
+        try {
+          const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          const oscillator = audioContext.createOscillator();
+          const gainNode = audioContext.createGain();
+
+          oscillator.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+
+          oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+          gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+
+          oscillator.start(audioContext.currentTime);
+          oscillator.stop(audioContext.currentTime + 0.1);
+        } catch (e) {
+        }
+      }
+
+      attachEventListeners() {
+        document.getElementById('newGameBtn').addEventListener('click', () => this.newGame());
+        document.getElementById('undoBtn').addEventListener('click', () => this.undoMove());
+        // no global manual drag tracking - we rely on browser drag image
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      new ChessGUI();
+    });
+  </script>
+</body>
+</html>

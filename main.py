@@ -452,9 +452,8 @@ class ChessEngine:
         end_row, end_col = self._from_algebraic(move[2:4])
         piece = self.current_state.board[start_row][start_col]
 
-        if piece.lower() == "p":
-            if (piece.isupper() and end_row == 0) or (piece.islower() and end_row == 7):
-                return move + promotion_piece.lower()
+        if (piece.isupper() and end_row == 0) or (piece.islower() and end_row == 7):
+            return move + promotion_piece.lower()
         return move
 
     # Game state checking
@@ -692,6 +691,11 @@ class ChessEngine:
                                             end = self._to_algebraic(r2, c2)
                                             return start + end
         return ""
+
+    def _get_piece_at_algebraic(self, notation: str) -> str:
+        """Gets the piece at a given algebraic notation square."""
+        row, col = self._from_algebraic(notation)
+        return self.current_state.board[row][col]
 
     def undo_move(self) -> bool:
         """Undo the last move."""
