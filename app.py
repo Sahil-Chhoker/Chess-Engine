@@ -1,4 +1,3 @@
-# app.py - Flask backend
 from flask import Flask, render_template, jsonify, request
 from main import ChessEngine
 import json
@@ -6,7 +5,6 @@ import json
 app = Flask(__name__)
 app.secret_key = "your-secret-key-here"
 
-# Global game instance (in production, use sessions or database)
 game_engine = ChessEngine()
 
 
